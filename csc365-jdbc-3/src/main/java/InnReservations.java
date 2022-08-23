@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class InnReservations{
-    private final String JDBC_URL = "jdbc:h2:~/csc365_lab7";
+    private final String JDBC_URL = "";
     private final String JDBC_USER = "";
     private final String JDBC_PASSWORD = "";
     public static void main(String[] args){
