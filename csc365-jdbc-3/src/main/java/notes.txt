@@ -1,0 +1,323 @@
+show tables
+select * from reservations
+select * from rooms
+desc reservations
+desc rooms
+
+select *
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+
+'2010-01-08'
+
+-- occupied on current date
+select *
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where CheckIn <= '2010-01-08' and CheckOut > '2010-01-08'
+
+-- not occupied on current date
+select *
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where RoomCode not in
+(select RoomCode
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where CheckIn <= '2010-01-08' and CheckOut > '2010-01-08')
+
+-- get unoccupied rooms and can checkin today
+select RoomCode, RoomName, true as AvailableToday
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where RoomCode not in
+(select RoomCode
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where CheckIn <= '2010-01-08' and CheckOut > '2010-01-08')
+group by RoomCode, RoomName
+
+-- get next reservation date
+select *
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where RoomCode in
+(select RoomCode
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where CheckIn <= '2010-01-08' and CheckOut > '2010-01-08')
+
+
+--next reservation date
+select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation
+from rooms
+inner join reservations r1 on r1.Room = rooms.RoomCode
+inner join reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn
+where r1.CheckIn >= '2010-01-08'
+group by r1.Room, r1.CheckIn, r1.Checkout
+having min(r2.CheckIn) >= r1.Checkout
+order by Room
+
+
+select Room, min(NextReservation) as NextReservation
+from (select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation
+from rooms
+inner join reservations r1 on r1.Room = rooms.RoomCode
+inner join reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn
+where r1.CheckIn >= '2010-01-08'
+group by r1.Room, r1.CheckIn, r1.Checkout
+having min(r2.CheckIn) >= r1.Checkout) as T
+group by Room
+
+select *
+from (select Room, min(NextReservation) as NextReservation
+from (select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation
+from rooms
+inner join reservations r1 on r1.Room = rooms.RoomCode
+inner join reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn
+where r1.CheckIn >= '2010-01-08'
+group by r1.Room, r1.CheckIn, r1.Checkout
+having min(r2.CheckIn) >= r1.Checkout) as T
+group by Room) as T
+right join
+(select RoomCode
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where CheckIn <= '2010-01-08' and CheckOut > '2010-01-08') as T2 on T2.RoomCode = T.Room
+
+
+
+--given current date, i want next available checkin
+select *, DATEDIFF(NextReservation, Checkout) as Dif
+from
+(select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation
+from rooms
+inner join reservations r1 on r1.Room = rooms.RoomCode
+inner join reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn
+where r1.CheckIn >= '2010-01-08'
+group by r1.Room, r1.CheckIn, r1.Checkout
+having min(r2.CheckIn) >= r1.Checkout
+order by Room) as T
+
+select Room, min(Checkout) as NextAvailableNotToday
+from (select *, DATEDIFF(NextReservation, Checkout) as Dif
+from
+(select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation
+from rooms
+inner join reservations r1 on r1.Room = rooms.RoomCode
+inner join reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn
+where r1.CheckIn >= '2010-01-08'
+group by r1.Room, r1.CheckIn, r1.Checkout
+having min(r2.CheckIn) >= r1.Checkout
+order by Room) as T) as T
+where Dif > 0
+group by Room
+
+select max(Checkout)
+from reservations
+where Room = 'SAY'
+
+select rooms.RoomCode, rooms.RoomName, Beds, bedType, maxOcc, basePrice, decor,
+case
+when AvailableToday = 1 then 'Today'
+when AvailableToday is null and NextReservation is null then (select max(Checkout) from reservations where Room = rooms.RoomCode)
+else NextAvailableNotToday
+end as Availability,
+case
+when NextReservation is null then 'None'
+else NextReservation
+end as NextReservation
+select *
+from rooms
+left join (select RoomCode, RoomName, true as AvailableToday
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where RoomCode not in
+(select RoomCode
+from rooms
+inner join reservations on reservations.Room = rooms.RoomCode
+where CheckIn <= '2010-01-08' and CheckOut > '2010-01-08')
+group by RoomCode, RoomName) as T on T.RoomCode = rooms.RoomCode
+left join (select Room, min(NextReservation) as NextReservation
+from (select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation
+from rooms
+inner join reservations r1 on r1.Room = rooms.RoomCode
+inner join reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn
+where r1.CheckIn >= '2010-01-08'
+group by r1.Room, r1.CheckIn, r1.Checkout
+having min(r2.CheckIn) >= r1.Checkout) as T
+group by Room) as T2 on rooms.RoomCode = T2.Room
+left join (select Room, min(Checkout) as NextAvailableNotToday
+from (select *, DATEDIFF(NextReservation, Checkout) as Dif
+from
+(select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation
+from rooms
+inner join reservations r1 on r1.Room = rooms.RoomCode
+inner join reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn
+where r1.CheckIn >= '2010-01-08'
+group by r1.Room, r1.CheckIn, r1.Checkout
+having min(r2.CheckIn) >= r1.Checkout
+order by Room) as T) as T
+where Dif > 0
+group by Room) as T3 on T3.Room = rooms.RoomCode
+
+
+select *
+from lab7_rooms
+inner join lab7_reservations on lab7_rooms.RoomCode = lab7_reservations.Room
+group by lab7_rooms.RoomCode
+
+select *
+from lab7_reservations l1
+join lab7_reservations l2 on l2.Room = l1.Room and l2.CheckIn >= l1.Checkout
+
+
+
+try (Connection conn = DriverManager.getConnection(JDBC_URL,
+							   JDBC_USER,
+							   JDBC_PASSWORD)) {
+
+        String sql = "select lab7_rooms.RoomCode, lab7_rooms.RoomName, Beds, bedType, maxOcc, basePrice, decor, "+
+        " case when AvailableToday = 1 then 'Today' when AvailableToday is null and NextReservation is null then CAST((select max(Checkout) from lab7_reservations where Room = lab7_rooms.RoomCode) AS CHAR) else CAST(NextAvailableNotToday AS CHAR) end as AvailableToday,"+
+        " case when NextReservation is null then 'None' else CAST(NextReservation AS CHAR) end as NextReservation"+
+        " from lab7_rooms"+
+        " left join (select RoomCode, RoomName, 1 as AvailableToday"+
+        " from lab7_rooms"+
+        " inner join lab7_reservations on lab7_reservations.Room = lab7_rooms.RoomCode"+
+        " where RoomCode not in"+
+        " (select RoomCode"+
+        " from lab7_rooms"+
+        " inner join lab7_reservations on lab7_reservations.Room = lab7_rooms.RoomCode"+
+        " where CheckIn <= CURDATE() and CheckOut > CURDATE())"+
+        " group by RoomCode, RoomName) as T on T.RoomCode = lab7_rooms.RoomCode"+
+        " left join (select Room, min(NextReservation) as NextReservation"+
+        " from (select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation"+
+        " from lab7_rooms"+
+        " inner join lab7_reservations r1 on r1.Room = lab7_rooms.RoomCode"+
+        " inner join lab7_reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn"+
+        " where r2.CheckIn >= CURDATE()"+
+        " group by r1.Room, r1.CheckIn, r1.Checkout"+
+        " having min(r2.CheckIn) >= r1.Checkout) as T"+
+        " group by Room) as T2 on lab7_rooms.RoomCode = T2.Room"+
+        " left join (select Room, min(Checkout) as NextAvailableNotToday"+
+        " from (select *, DATEDIFF(DAY, Checkout, NextReservation) as Dif"+
+        " from"+
+        " (select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextReservation"+
+        " from lab7_rooms"+
+        " inner join lab7_reservations r1 on r1.Room = lab7_rooms.RoomCode"+
+        " inner join lab7_reservations r2 on r1.Room = r2.Room and r1.Checkout <= r2.CheckIn"+
+        " where r2.CheckIn >= CURDATE()"+
+        " group by r1.Room, r1.CheckIn, r1.Checkout"+
+        " having min(r2.CheckIn) >= r1.Checkout"+
+        " order by Room) as T) as T"+
+        " where Dif > 0"+
+        " group by Room) as T3 on T3.Room = lab7_rooms.RoomCode order by lab7_rooms.RoomCode";
+        
+        
+	    try (Statement stmt = conn.createStatement();
+		 ResultSet rs = stmt.executeQuery(sql)) {
+
+            System.out.format("\n%-10s\t%-25s\t\t%-10s\t%-10s\t%-10s\t%-10s\t%-10s\t", "RoomCode", "RoomName", "Beds", "BedType", "MaxOcc", "BasePrice", "Decor");
+            System.out.format("%-10s\t%-10s\n\n", "Availability", "NextReservation");
+            //System.out.format("%-10s\t%-10s\n", "available", "next");
+		while (rs.next()) {
+		    String RoomCode = rs.getString("RoomCode");
+            String RoomName = rs.getString("RoomName");
+            int Beds = rs.getInt("Beds");
+            String bedType = rs.getString("bedType");
+            int maxOcc = rs.getInt("maxOcc");
+            float basePrice = rs.getFloat("basePrice");
+            String decor = rs.getString("decor");
+            String available = rs.getString("AvailableToday");
+            String next = rs.getString("NextReservation");
+            System.out.format("%-10s\t%-25s\t\t %-10d\t%-10s\t%-10d\t%-10s\t%-10s\t", RoomCode, RoomName, Beds, bedType, maxOcc, basePrice, decor);
+            //if(available==null){available="Today";}
+            System.out.format("%-10s\t%-10s\n", available, next);
+        }
+	    }
+	}
+
+
+
+
+
+    select Room, min(PleaseWork)
+from
+(select Room,
+case when Dif > 0 then Checkout
+when Dif = 0 then NextOut
+end as PleaseWork
+from
+(select *, DATEDIFF(DAY, Checkout, NextRes) as Dif
+from
+(select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextRes, min(r2.Checkout) as NextOut
+from lab7_reservations r1
+inner join lab7_reservations r2 on r2.Room = r1.Room and r2.CheckIn <> r1.CheckIn and r2.CheckIn >= r1.Checkout
+group by r1.Room, r1.CheckIn, r1.Checkout) as T) as T) as T
+group by Room
+
+
+
+
+
+
+
+------------
+select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn)
+from lab7_reservations r1
+inner join lab7_reservations r2 on r2.Room = r1.Room and r2.CheckIn <> r1.CheckIn and r2.CheckIn >= r1.Checkout
+group by r1.Room, r1.CheckIn, r1.Checkout
+
+
+select *
+         from lab7_rooms r1
+        left outer join
+        (select Room as Today
+        from lab7_reservations
+        where Room not in
+        (select Room
+        from lab7_reservations
+        where CheckIn <= CURDATE() and Checkout > CURDATE())
+        group by Room) as T on T.Today = r1.RoomCode
+        left outer join
+        (select Room, min(CheckIn) as NextReservation
+        from
+        (select r2.Room, r2.CheckIn, r2.Checkout
+        from lab7_reservations r1
+        inner join lab7_reservations r2 on r1.Room = r2.Room and r1.CheckIn <> r2.CheckIn and r1.Checkout <> r2.Checkout and r2.CheckIn >= r1.Checkout
+        group by r2.Room, r2.CheckIn, r2.Checkout
+        having min(r2.CheckIn) >= CURDATE()) as T
+        group by Room) as T2 on T2.Room = r1.RoomCode
+       left outer join
+       (select Room, min(PleaseWork) as NextCheckIn
+from
+(select Room,
+case when Dif > 0 then Checkout
+when Dif = 0 then NextOut
+end as PleaseWork
+from
+(select *, DATEDIFF(DAY, Checkout, NextRes) as Dif
+from
+(select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextRes, min(r2.Checkout) as NextOut
+from lab7_reservations r1
+inner join lab7_reservations r2 on r2.Room = r1.Room and r2.CheckIn <> r1.CheckIn and r2.CheckIn >= r1.Checkout
+group by r1.Room, r1.CheckIn, r1.Checkout) as T) as T) as T
+group by Room) as T3 on T3.Room = r1.RoomCode
+       order by RoomCode
+
+select Room, min(PleaseWork)
+from
+(select Room,
+case when Dif > 0 then Checkout
+when Dif = 0 then NextOut
+end as PleaseWork
+from
+(select *, DATEDIFF(DAY, Checkout, NextRes) as Dif
+from
+(select r1.Room, r1.CheckIn, r1.Checkout, min(r2.CheckIn) as NextRes, min(r2.Checkout) as NextOut
+from lab7_reservations r1
+inner join lab7_reservations r2 on r2.Room = r1.Room and r2.CheckIn <> r1.CheckIn and r2.CheckIn >= r1.Checkout
+group by r1.Room, r1.CheckIn, r1.Checkout) as T) as T) as T
+group by Room
+
+select * from lab7_reservations
